@@ -61,6 +61,14 @@ static GameSurfaceView* pojavWindow;
 
 @end
 
+
+// iOS 27 exposes the touchscreen as a virtual GCMouse ("CoreDevice touchscreenGesture").
+// Treating it as a real mouse hides the touch controls, so ignore it.
+static BOOL isVirtualTouchMouse(GCMouse *mouse) {
+    NSString *name = mouse.vendorName ?: @"";
+    return [name rangeOfString:@"touchscreenGesture" options:NSCaseInsensitiveSearch].location != NSNotFound;
+}
+
 @implementation SurfaceViewController
 
 - (instancetype)initWithMetadata:(NSDictionary *)metadata {
@@ -205,8 +213,12 @@ static GameSurfaceView* pojavWindow;
 
     [KeyboardInput initKeycodeTable];
     self.mouseConnectCallback = [[NSNotificationCenter defaultCenter] addObserverForName:GCMouseDidConnectNotification object:nil queue:[NSOperationQueue mainQueue] usingBlock:^(NSNotification *note) {
-        NSLog(@"Input: Mouse connected!");
         GCMouse* mouse = note.object;
+        if (isVirtualTouchMouse(mouse)) {
+            NSLog(@"Input: Ignoring virtual touchscreen mouse %@", mouse.vendorName);
+            return;
+        }
+        NSLog(@"Input: Mouse connected!");
         [self registerMouseCallbacks:mouse];
         self.mousePointerView.hidden = isGrabbing || !virtualMouseEnabled;
         [self setNeedsUpdateOfPrefersPointerLocked];
@@ -224,7 +236,7 @@ static GameSurfaceView* pojavWindow;
             self.ctrlView.hidden = NO;
         }
     }];
-    if (GCMouse.current != nil) {
+    if (GCMouse.current != nil && !isVirtualTouchMouse(GCMouse.current)) {
         [self registerMouseCallbacks:GCMouse.current];
     }
     
