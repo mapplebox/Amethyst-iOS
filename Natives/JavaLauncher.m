@@ -1,3 +1,5 @@
+#include <limits.h>
+#include <stdlib.h>
 #include <dirent.h>
 #include <dlfcn.h>
 #include <errno.h>
@@ -239,7 +241,21 @@ int launchJVM(NSString *username, id launchTarget, int width, int height, int mi
     margv[++margc] = "-Xms128M";
     margv[++margc] = [NSString stringWithFormat:@"-Xmx%dM", allocmem].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Djava.library.path=%@/Frameworks", NSBundle.mainBundle.bundlePath].UTF8String;
+    // iOS: /var -> /private/var symlink; the sandbox denies lstat("/var"), which breaks
+    // Path.toRealPath(NOFOLLOW_LINKS) (used e.g. by Cobblemon's Showdown). Use the real path.
+    [NSFileManager.defaultManager createDirectoryAtPath:gameDir withIntermediateDirectories:YES attributes:nil error:nil];
+    char resolvedGameDir[PATH_MAX];
+    if (realpath(gameDir.UTF8String, resolvedGameDir) != NULL) {
+        gameDir = @(resolvedGameDir);
+    }
     margv[++margc] = [NSString stringWithFormat:@"-Duser.dir=%@", gameDir].UTF8String;
+    // Keep the process working directory in sync with user.dir (relative NIO/native paths use the cwd)
+    [NSFileManager.defaultManager createDirectoryAtPath:gameDir withIntermediateDirectories:YES attributes:nil error:nil];
+    if (chdir(gameDir.UTF8String) != 0) {
+        NSLog(@"[JavaLauncher] Working directory: chdir to %@ failed (errno %d)", gameDir, errno);
+    } else {
+        NSLog(@"[JavaLauncher] Working directory set to %@", gameDir);
+    }
     margv[++margc] = [NSString stringWithFormat:@"-Duser.home=%s", getenv("AME_HOME")].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-Duser.timezone=%@", NSTimeZone.localTimeZone.name].UTF8String;
     margv[++margc] = [NSString stringWithFormat:@"-DUIScreen.maximumFramesPerSecond=%d", (int)UIScreen.mainScreen.maximumFramesPerSecond].UTF8String;
