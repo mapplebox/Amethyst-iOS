@@ -282,6 +282,22 @@
     [task resume];
 }
 
+- (void)installModpackFromLocalFile:(NSString *)filePath api:(ModpackAPI *)api {
+    [self prepareForDownload];
+    NSString *name = [[filePath.lastPathComponent stringByDeletingPathExtension] lowercaseString];
+    if ([name hasPrefix:@"import-"]) name = [name substringFromIndex:7];
+    name = [[name stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceCharacterSet] stringByReplacingOccurrencesOfString:@" " withString:@"_"];
+    NSString *path = [NSString stringWithFormat:@"%s/custom_gamedir/%@", getenv("GAME_DIR"), name];
+    NSLog(@"[ModpackImport] Unpacking %@ into %@", filePath, path);
+    // Mirror the remote flow: there the finished .mrpack download is a completed child progress.
+    unsigned long long pkgSize = [[NSFileManager.defaultManager attributesOfItemAtPath:filePath error:nil] fileSize];
+    if (pkgSize == 0) pkgSize = 1;
+    NSProgress *pkgProgress = [NSProgress progressWithTotalUnitCount:(int64_t)pkgSize];
+    pkgProgress.completedUnitCount = (int64_t)pkgSize;
+    [self.progress addChild:pkgProgress withPendingUnitCount:(int64_t)pkgSize];
+    [api downloader:self submitDownloadTasksFromPackage:filePath toPath:path];
+}
+
 #pragma mark - Utilities
 
 - (void)prepareForDownload {

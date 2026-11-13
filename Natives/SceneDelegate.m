@@ -8,6 +8,27 @@ extern UIWindow *mainWindow;
 
 @end
 
+
+static void importOpenedModpack(NSURL *url) {
+    if (![url.pathExtension.lowercaseString isEqualToString:@"mrpack"]) return;
+    BOOL scoped = [url startAccessingSecurityScopedResource];
+    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSString *dir = [docs stringByAppendingPathComponent:@"modpacks"];
+    [NSFileManager.defaultManager createDirectoryAtPath:dir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *dest = [dir stringByAppendingPathComponent:url.lastPathComponent];
+    [NSFileManager.defaultManager removeItemAtPath:dest error:nil];
+    NSError *error;
+    [NSFileManager.defaultManager copyItemAtURL:url toURL:[NSURL fileURLWithPath:dest] error:&error];
+    if (scoped) [url stopAccessingSecurityScopedResource];
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(1.0 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        if (error) {
+            showDialog(@"Import failed", error.localizedDescription);
+        } else {
+            showDialog(@"Modpack ready", [NSString stringWithFormat:@"%@ was saved. Open the modpack installer, tap Import .mrpack and pick it from the list.", url.lastPathComponent]);
+        }
+    });
+}
+
 @implementation SceneDelegate
 
 
@@ -18,6 +39,15 @@ extern UIWindow *mainWindow;
     mainWindow = self.window;
     launchInitialViewController(self.window);
     [self.window makeKeyAndVisible];
+    for (UIOpenURLContext *ctx in connectionOptions.URLContexts) {
+        importOpenedModpack(ctx.URL);
+    }
+}
+
+- (void)scene:(UIScene *)scene openURLContexts:(NSSet<UIOpenURLContext *> *)URLContexts {
+    for (UIOpenURLContext *ctx in URLContexts) {
+        importOpenedModpack(ctx.URL);
+    }
 }
 
 

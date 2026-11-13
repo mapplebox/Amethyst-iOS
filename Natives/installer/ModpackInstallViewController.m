@@ -9,18 +9,21 @@
 #import "ios_uikit_bridge.h"
 #import "utils.h"
 #include <dlfcn.h>
+#import <UniformTypeIdentifiers/UniformTypeIdentifiers.h>
 
 #define kCurseForgeGameIDMinecraft 432
 #define kCurseForgeClassIDModpack 4471
 #define kCurseForgeClassIDMod 6
 
-@interface ModpackInstallViewController()<UIContextMenuInteractionDelegate>
+@interface ModpackInstallViewController()<UIContextMenuInteractionDelegate, UIDocumentPickerDelegate>
 @property(nonatomic) UISearchController *searchController;
 @property(nonatomic) UIMenu *currentMenu;
 @property(nonatomic) NSMutableArray *list;
 @property(nonatomic) NSMutableDictionary *filters;
 @property ModrinthAPI *modrinth;
 @end
+
+static ModpackInstallViewController *gPickerOwner;
 
 @implementation ModpackInstallViewController
 
@@ -38,7 +41,90 @@
         @"name": @" "
         // mcVersion
     }.mutableCopy;
+    self.navigationItem.leftBarButtonItem = [[UIBarButtonItem alloc] initWithTitle:@"Import .mrpack" style:UIBarButtonItemStylePlain target:self action:@selector(actionImportMrpack)];
     [self updateSearchResults];
+}
+
+- (NSArray<NSString *> *)localMrpackFiles {
+    NSString *docs = NSSearchPathForDirectoriesInDomains(NSDocumentDirectory, NSUserDomainMask, YES).firstObject;
+    NSMutableArray *found = [NSMutableArray new];
+    for (NSString *dir in @[docs, [docs stringByAppendingPathComponent:@"modpacks"]]) {
+        for (NSString *f in [NSFileManager.defaultManager contentsOfDirectoryAtPath:dir error:nil]) {
+            if ([f.pathExtension.lowercaseString isEqualToString:@"mrpack"]) {
+                [found addObject:[dir stringByAppendingPathComponent:f]];
+            }
+        }
+    }
+    return found;
+}
+
+- (void)importLocalMrpackAtPath:(NSString *)src {
+    NSString *dest = [NSTemporaryDirectory() stringByAppendingPathComponent:[@"import-" stringByAppendingString:src.lastPathComponent]];
+    [NSFileManager.defaultManager removeItemAtPath:dest error:nil];
+    NSError *error;
+    [NSFileManager.defaultManager copyItemAtPath:src toPath:dest error:&error];
+    if (error) {
+        showDialog(localize(@"Error", nil), error.localizedDescription);
+        return;
+    }
+    [NSFileManager.defaultManager removeItemAtPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"icon.png"] error:nil];
+    NSLog(@"[ModpackImport] Installing local modpack %@", dest);
+    [NSNotificationCenter.defaultCenter postNotificationName:@"InstallModpack" object:self.modrinth userInfo:@{@"localPath": dest}];
+    UINavigationController *nav = self.navigationController;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(0.5 * NSEC_PER_SEC)), dispatch_get_main_queue(), ^{
+        [nav.presentingViewController dismissViewControllerAnimated:YES completion:nil];
+    });
+}
+
+- (void)actionImportMrpack {
+    UIAlertController *sheet = [UIAlertController alertControllerWithTitle:@"Import .mrpack"
+        message:@"Files in On My iPhone > Amethyst are listed here." preferredStyle:UIAlertControllerStyleActionSheet];
+    for (NSString *path in [self localMrpackFiles]) {
+        [sheet addAction:[UIAlertAction actionWithTitle:path.lastPathComponent style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+            [self importLocalMrpackAtPath:path];
+        }]];
+    }
+    [sheet addAction:[UIAlertAction actionWithTitle:@"Choose from Files..." style:UIAlertActionStyleDefault handler:^(UIAlertAction *a) {
+        UIViewController *root = self.navigationController.presentingViewController;
+        gPickerOwner = self; // keep alive: the picker's delegate is weak and this sheet gets dismissed
+        [self.navigationController dismissViewControllerAnimated:YES completion:^{
+            UIDocumentPickerViewController *picker = [[UIDocumentPickerViewController alloc]
+                initForOpeningContentTypes:@[UTTypeItem] asCopy:YES];
+            picker.delegate = gPickerOwner;
+            picker.allowsMultipleSelection = NO;
+            picker.modalPresentationStyle = UIModalPresentationFullScreen;
+            [root presentViewController:picker animated:YES completion:nil];
+        }];
+    }]];
+    [sheet addAction:[UIAlertAction actionWithTitle:localize(@"Cancel", nil) style:UIAlertActionStyleCancel handler:nil]];
+    sheet.popoverPresentationController.barButtonItem = self.navigationItem.leftBarButtonItem;
+    [self presentViewController:sheet animated:YES completion:nil];
+}
+
+- (void)documentPickerWasCancelled:(UIDocumentPickerViewController *)controller {
+    gPickerOwner = nil;
+}
+
+- (void)documentPicker:(UIDocumentPickerViewController *)controller didPickDocumentsAtURLs:(NSArray<NSURL *> *)urls {
+    dispatch_async(dispatch_get_main_queue(), ^{ gPickerOwner = nil; });
+    NSURL *url = urls.firstObject;
+    if (!url) return;
+    NSString *ext = url.pathExtension.lowercaseString;
+    if (![ext isEqualToString:@"mrpack"] && ![ext isEqualToString:@"zip"]) {
+        showDialog(localize(@"Error", nil), @"Please pick a Modrinth modpack file (.mrpack).");
+        return;
+    }
+    NSString *dest = [NSTemporaryDirectory() stringByAppendingPathComponent:[@"import-" stringByAppendingString:url.lastPathComponent]];
+    [NSFileManager.defaultManager removeItemAtPath:dest error:nil];
+    NSError *error;
+    [NSFileManager.defaultManager copyItemAtPath:url.path toPath:dest error:&error];
+    if (error) {
+        showDialog(localize(@"Error", nil), error.localizedDescription);
+        return;
+    }
+    // no Modrinth icon for local packs: drop a stale icon from an earlier install
+    [NSFileManager.defaultManager removeItemAtPath:[NSTemporaryDirectory() stringByAppendingPathComponent:@"icon.png"] error:nil];
+    [NSNotificationCenter.defaultCenter postNotificationName:@"InstallModpack" object:self.modrinth userInfo:@{@"localPath": dest}];
 }
 
 - (void)loadSearchResultsWithPrevList:(BOOL)prevList {
