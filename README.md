@@ -20,9 +20,12 @@ Known issue: "Choose from Files..." in the import sheet can hang inside the app.
 - English: https://mapplebox.com/minecraft-java-cobblemon-iphone-duo/
 - Deutsch: https://mapplebox.de/minecraft-java-cobblemon-iphone-duo/
 
-### Download
+### No downloads, build it yourself
 
-Unsigned IPAs (fake-signed with `ldid`, built by the "Unsigned IPA (fork)" workflow) are attached to [Releases](../../releases). Your sideloading app (SideStore, AltStore, ...) signs the IPA with your own Apple account. There are no builds signed by us.
+We don't publish IPAs of this fork. You build it yourself, two ways:
+
+- **On a Mac:** see "Build" below.
+- **Without a Mac:** fork this repo, enable Actions in your fork, then run Actions > "Unsigned IPA (fork)" > Run workflow. It builds a fake-signed IPA on a GitHub-hosted Mac; download it from the finished run. Your sideloading app (SideStore, AltStore, ...) signs it with your own Apple account. This workflow has not been run by us yet.
 
 ### Build
 
