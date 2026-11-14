@@ -1,0 +1,38 @@
+# Builds an UNSIGNED (ldid fake-signed) Amethyst IPA of this branch on a GitHub-hosted Mac.
+# Your sideloading app (SideStore, AltStore, ...) signs it with your own Apple account.
+# Manual only: Actions tab > "Unsigned IPA (fork)" > Run workflow.
+# Upstream's development.yml needs upstream's self-hosted runner and will not run in this fork.
+name: Unsigned IPA (fork)
+
+on:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: JDK 8 (build JDK for the Java parts)
+        uses: actions/setup-java@v4
+        with:
+          distribution: zulu
+          java-version: '8'
+          architecture: aarch64
+
+      - name: Build tools
+        run: brew install cmake ldid wget make
+
+      - name: Build IPA
+        run: |
+          export PATH="$(brew --prefix)/opt/make/libexec/gnubin:$(brew --prefix)/bin:$PATH"
+          gmake -j"$(sysctl -n hw.ncpu)" package PLATFORM=2 BOOTJDK="$JAVA_HOME/bin"
+          ls -la artifacts
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: amethyst-ios-fixes-unsigned-ipa
+          path: artifacts/*.ipa

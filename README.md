@@ -1,3 +1,46 @@
+# Amethyst-iOS, iOS fixes branch (mapplebox fork)
+
+This is a fork of [AngelAuraMC/Amethyst-iOS](https://github.com/AngelAuraMC/Amethyst-iOS), the Minecraft: Java Edition launcher for iOS.
+All credit for Amethyst goes to the Amethyst team and its contributors (see below). The license stays **GPL-3.0**.
+
+Branch `mapplebox/ios-fixes` = upstream `main` at `f98c413` plus a few small changes we needed to run a big Cobblemon modpack (189 mods) on an iPhone Duo with iOS 27.2:
+
+| Change | Why |
+|---|---|
+| **Import local `.mrpack` files** (Share / Open in Amethyst, or "Import .mrpack" in the modpack installer) | Modpacks that are not on Modrinth, or a specific version you exported yourself |
+| **Ignore the iOS 27 virtual touchscreen mouse** | iOS 27 reports a virtual `GCMouse`, Amethyst then hid the on-screen controls |
+| **Start the JVM inside the modpack folder** (`chdir` + `realpath` of the profile game directory) | Working directory and `user.dir` differed for Modrinth packs (`./custom_gamedir/<pack>`), Cobblemon unpacked Showdown into one folder and read it from the other |
+| [`cobblemon-ios-fix/`](cobblemon-ios-fix/) java agent | Cobblemon's Showdown battle engine hangs on iOS (`toRealPath(NOFOLLOW_LINKS)` is denied by the sandbox), plus a missing `Narrator$InitializeException` class |
+
+Tested on: iPhone Duo, iOS 27.2, JIT via StikDebug, renderer ANGLE, 4937 MB RAM for Java, November 2026. Nothing else was tested, so other devices and iOS versions may behave differently.
+
+Known issue: "Choose from Files..." in the import sheet can hang inside the app. Use Share / Open in, or put the `.mrpack` into On My iPhone > Amethyst and pick it from the list.
+
+**Step-by-step guides** (JIT, RAM, JVM flags, every fix with copy-paste values):
+- English: https://mapplebox.com/minecraft-java-cobblemon-iphone-duo/
+- Deutsch: https://mapplebox.de/minecraft-java-cobblemon-iphone-duo/
+
+### Download
+
+Unsigned IPAs (fake-signed with `ldid`, built by the "Unsigned IPA (fork)" workflow) are attached to [Releases](../../releases). Your sideloading app (SideStore, AltStore, ...) signs the IPA with your own Apple account. There are no builds signed by us.
+
+### Build
+
+On a Mac with Apple silicon and Xcode:
+
+```sh
+brew install cmake ldid wget make
+# JDK 8 is needed as the build JDK, e.g. Azul Zulu 8 for arm64
+gmake -j package PLATFORM=2 BOOTJDK=/path/to/zulu8/Contents/Home/bin
+# -> artifacts/org.angelauramc.amethyst-*-ios.ipa (fake-signed)
+```
+
+To install it with your own development profile, re-sign every Mach-O in the app with an entitlements file that contains your team's `application-identifier`, `get-task-allow` (needed for JIT through a debugger), `com.apple.developer.kernel.increased-memory-limit` and `com.apple.developer.kernel.extended-virtual-addressing`. Turn the last two on as capabilities for your App ID first.
+
+Not affiliated with Mojang, Microsoft, the Cobblemon team or AngelAuraMC.
+
+---
+
 # Angel Aura Amethyst (iOS)
 [![Development build](https://github.com/AngelAuraMC/Amethyst-iOS/actions/workflows/development.yml/badge.svg?branch=main)](https://github.com/AngelAuraMC/Amethyst-iOS/actions/workflows/development.yml)
 [![Crowdin](https://badges.crowdin.net/angelauramc/localized.svg)](https://crowdin.com/project/angelauramc)
