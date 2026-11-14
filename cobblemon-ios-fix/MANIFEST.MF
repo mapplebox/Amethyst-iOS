@@ -1,0 +1,3 @@
+Premain-Class: mapplebox.cobblemonios.CobblemonIosFix
+Implementation-Title: cobblemon-ios-fix
+Implementation-Version: 1.0.0
